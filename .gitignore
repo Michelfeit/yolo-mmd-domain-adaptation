@@ -1,0 +1,27 @@
+# Training outputs (checkpoints, plots, per-run logs) -- large, regenerable, not source
+runs/
+
+# Ad-hoc dev logs from background training runs
+logs/
+
+# Ultralytics auto-downloaded pretrained weights (re-downloaded on demand)
+*.pt
+*.pth
+
+# Ultralytics dataset label caches (auto-regenerated on first scan)
+*.cache
+
+# Python
+__pycache__/
+*.pyc
+*.egg-info/
+build/
+dist/
+
+# LaTeX build artifacts (only the .tex source and the committed .pdf matter)
+docs/*.aux
+docs/*.log
+docs/*.out
+
+# OS cruft
+.DS_Store

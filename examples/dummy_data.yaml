@@ -1,0 +1,16 @@
+# Tiny, fully synthetic dummy dataset (see make_dummy_data.py) -- no external data or
+# mounted drives required. Meant only to prove the pipeline runs end-to-end; 8 train /
+# 2 val images per domain is nowhere near enough to demonstrate real domain adaptation
+# benefits. Swap in your own data following this same source/target schema -- see the
+# main README for how "source" vs "target" map onto your two domains.
+path: examples/dummy_data  # relative to repo root -- run scripts from there, e.g. `python examples/train.py`
+
+source:
+  train: real/images/train
+  val: real/images/val
+
+target:
+  train: synthetic/images/train
+  val: synthetic/images/val
+
+names: [vehicle]

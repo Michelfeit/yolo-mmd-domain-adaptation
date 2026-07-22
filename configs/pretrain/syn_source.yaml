@@ -1,0 +1,7 @@
+path: /media/chr65046/4TB-SSD/Syndrone/anchor
+
+train: train/
+
+val: val/
+
+names: [vehicle]

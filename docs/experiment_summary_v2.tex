@@ -1,0 +1,67 @@
+\documentclass[11pt]{article}
+
+\usepackage[margin=1in]{geometry}
+\usepackage{booktabs}
+\usepackage{amsmath}
+\usepackage{hyperref}
+
+\title{Dual-Domain MMD Adaptation: Regularized Re-Run Update}
+\author{}
+\date{\today}
+
+\begin{document}
+\maketitle
+
+\section{What changed}
+
+The synthetic$\to$real adaptation direction (\texttt{syn\_source\_real\_target}) was re-run with
+two additional regularization mechanisms enabled, keeping everything else (data, architecture,
+epochs, layer, kernel) identical to the original run:
+
+\begin{itemize}
+    \item \textbf{Linear MMD-weight decay}: $\lambda_{DA}$ now decays linearly from $1.0$ to
+    $0.1$ over the course of training, instead of staying constant at $0.8$ throughout.
+    \item \textbf{Bandwidth freeze at epoch 5}: the RBF kernel's bandwidth stops updating after
+    epoch 5 and is held fixed for the remainder of training, instead of continuing to track the
+    batch statistics via exponential moving average for all 100 epochs.
+\end{itemize}
+
+\section{Result}
+
+\begin{table}[h!]
+    \centering
+    \begin{tabular}{lrrrr}
+        \toprule
+        Model & Eval domain & mAP50 & mAP50-95 \\
+        \midrule
+        baseline (syn-pretrained) & syn (in-domain) & 0.758 & 0.508 \\
+        baseline (real-pretrained) & real (in-domain) & 0.896 & 0.641 \\
+        \midrule
+        syn\_source\_real\_target (original) & real (target) & 0.867 & 0.599 \\
+        syn\_source\_real\_target (original) & syn (source) & 0.568 & 0.337 \\
+        \midrule
+        \textbf{syn\_source\_real\_target\_reg (new)} & \textbf{real (target)} & \textbf{0.886} & \textbf{0.618} \\
+        \textbf{syn\_source\_real\_target\_reg (new)} & \textbf{syn (source)} & \textbf{0.674} & \textbf{0.396} \\
+        \bottomrule
+    \end{tabular}
+    \caption{Original vs.\ regularized re-run of the synthetic$\to$real direction, evaluated on
+    the same stride-3 subsampled validation sets used for the pretrain baselines.}
+\end{table}
+
+The regularized re-run improves on both fronts simultaneously: target-domain (real) mAP50 rises
+from 0.867 to 0.886, closing most of the remaining gap to the in-domain baseline (0.896). More
+notably, source-domain (syn) performance -- the forgetting metric -- recovers substantially,
+from 0.568 to 0.674 mAP50, more than halving the regression relative to the syn baseline (0.758).
+
+\section{The EMA bandwidth mechanism}
+
+The RBF kernel's bandwidth is not fixed; it is estimated as an exponential moving average of the
+batch's mean pairwise squared distance, updated every training step. As the two domains' features
+grow closer together under MMD alignment, this estimate shrinks too, which sharpens the kernel
+and rewards the optimizer for collapsing the representation further rather than genuinely
+matching the two distributions -- a feedback loop that self-reinforces as training progresses.
+Freezing the bandwidth after a short warm-up period (epoch 5, by which point the EMA has already
+smoothed over hundreds of batches) breaks this loop while still using a representative early-training
+estimate, which is the most likely explanation for the reduced forgetting observed above.
+
+\end{document}

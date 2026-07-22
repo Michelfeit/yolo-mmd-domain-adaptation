@@ -1,0 +1,7 @@
+# Plain flat-schema yaml for the source domain alone, for pretraining a normal YOLO
+# baseline (no dual-domain code involved) — paths should match the `source:` block in
+# dual_domain_data.yaml.
+path: /data/aerial
+train: synthetic/images/train
+val: synthetic/images/val
+names: [vehicle, person]

@@ -1,0 +1,14 @@
+# Example dual-domain dataset yaml.
+# `source`: the domain the model is already pretrained on (e.g. cheap synthetic aerial imagery).
+# `target`: the domain being fine-tuned + feature-aligned toward source (e.g. scarce real labels).
+path: /data/aerial
+
+source:
+  train: synthetic/images/train
+  val: synthetic/images/val
+
+target:
+  train: real/images/train
+  val: real/images/val
+
+names: [vehicle, person]

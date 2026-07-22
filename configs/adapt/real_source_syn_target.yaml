@@ -1,0 +1,15 @@
+# Dual-domain adaptation: source = real (already pretrained, forward-only for MMD),
+# target = synthetic (gets the detection loss + is feature-aligned toward source).
+# Simulates "source is small, target is large": source uses the same stride-subsampled
+# anchor/ set the baseline checkpoint was pretrained on (see scripts/make_anchor_subset.py,
+# configs/pretrain/real_source.yaml); target uses the full dataset.
+
+source:
+  train: /media/chr65046/4TB-SSD/VisDrone_20250110/anchor/train
+  val: /media/chr65046/4TB-SSD/VisDrone_20250110/anchor/val
+
+target:
+  train: /media/chr65046/4TB-SSD/Syndrone/train/labels_vehicle
+  val: /media/chr65046/4TB-SSD/Syndrone/val/labels_vehicle
+
+names: [vehicle]

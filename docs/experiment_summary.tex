@@ -1,0 +1,110 @@
+\documentclass[11pt]{article}
+
+\usepackage[margin=1in]{geometry}
+\usepackage{booktabs}
+\usepackage{amsmath}
+\usepackage{hyperref}
+
+\title{Dual-Domain MMD Adaptation: Experiment Summary}
+\author{}
+\date{\today}
+
+\begin{document}
+\maketitle
+
+\section{What was built}
+
+A YOLOv10n detector with an added Maximum Mean Discrepancy (MMD) alignment term between two
+domains --- \textbf{real} (VisDrone aerial imagery) and \textbf{syn} (Syndrone synthetic aerial
+imagery), single class (vehicle). The pipeline follows a two-stage procedure:
+
+\begin{enumerate}
+    \item \textbf{Pretraining} (standard, stock ultralytics, no MMD): the model is trained
+    normally on one domain, called the \emph{source} domain.
+    \item \textbf{Adaptation}: that checkpoint is then further fine-tuned on the \emph{other}
+    domain, called the \emph{target} domain, using the target domain's own detection loss plus an
+    MMD term computed between the two domains' backbone features (hooked at layer 10, RBF
+    kernel, momentum-smoothed bandwidth, constant weight $\lambda_{DA}=0.8$). The source domain's
+    forward pass is gradient-detached (\texttt{detach\_source\_features=True}), so it only ever
+    supplies a fixed reference feature distribution --- it never receives a training signal
+    itself during adaptation; only the target domain's features are pulled toward it.
+\end{enumerate}
+
+A deliberate size asymmetry was built into the setup: the \emph{source} domain always uses a
+small, stride-3 subsampled dataset ($\sim\!1/3$ of full size --- real: 2157 train images, syn:
+1509), while the \emph{target} domain always uses the \emph{full} dataset (real: 6470, syn: 4525)
+--- simulating ``pretrained on limited data, fine-tune using a larger dataset from a different
+domain.''
+
+\section{What was tested, and in which direction}
+
+\textbf{Baseline (no adaptation)}: each domain pretrained standalone on its own small
+subsampled data, then cross-evaluated on both domains' (small) validation sets --- giving
+in-domain and zero-shot cross-domain reference numbers.
+
+\textbf{Direction 1 --- \texttt{real\_source\_syn\_target}}: pretrained on \textbf{real} (small),
+adapted with \textbf{syn} as the target (full dataset). Tests whether real$\to$synthetic
+adaptation helps synthetic-domain performance.
+
+\textbf{Direction 2 --- \texttt{syn\_source\_real\_target}}: pretrained on \textbf{syn} (small),
+adapted with \textbf{real} as the target (full dataset). Tests whether synthetic$\to$real
+adaptation helps real-domain performance --- closer to the project's original motivating premise
+(cheap synthetic data helping a scarce-label real domain).
+
+\section{Results}
+
+\begin{table}[h!]
+    \centering
+    \begin{tabular}{lrr}
+        \toprule
+         & mAP50 & mAP50-95 \\
+        \midrule
+        baseline syn$\to$syn (in-domain) & 0.758 & 0.508 \\
+        baseline real$\to$real (in-domain) & 0.896 & 0.641 \\
+        baseline syn$\to$real (cross, no adaptation) & 0.194 & 0.116 \\
+        baseline real$\to$syn (cross, no adaptation) & 0.592 & 0.359 \\
+        \midrule
+        \textbf{Dir. 1} --- adapted, eval on \textbf{syn (target)} & \textbf{0.824} (+0.067) & \textbf{0.600} (+0.091) \\
+        Dir. 1 --- adapted, eval on real (source) & 0.489 ($-$0.407) & 0.340 ($-$0.301) \\
+        \midrule
+        \textbf{Dir. 2} --- adapted, eval on \textbf{real (target)} & \textbf{0.867} ($-$0.029) & \textbf{0.599} ($-$0.042) \\
+        Dir. 2 --- adapted, eval on syn (source) & 0.568 ($-$0.190) & 0.337 ($-$0.171) \\
+        \bottomrule
+    \end{tabular}
+    \caption{Baseline vs.\ adapted mAP, both directions. Deltas are relative to the matching
+    in-domain baseline.}
+\end{table}
+
+\textbf{Direction 1 (target = syn) genuinely improved over its baseline} on both metrics.
+\textbf{Direction 2 (target = real) did not} --- a small regression at both IoU thresholds. In
+both directions, the \textbf{source domain's own performance dropped substantially} ---
+the source never receives a detection-loss gradient for the full 100-epoch adaptation run, so the
+shared backbone drifts away from what worked for it, a forgetting effect independent of whether
+MMD is ``working.''
+
+\section{Feature-space (PCA) analysis}
+
+A fixed-basis PCA (fit once before adaptation on 500 GAP-pooled layer-10 features per domain,
+frozen thereafter, re-projected every epoch) was tracked for Direction 1. It showed the target
+(syn) domain's features collapsing into a tight cluster near one edge of the source (real)
+domain's spread, rather than spreading out to match the source distribution's shape ---
+consistent with a known characteristic of naive two-sample MMD alignment (collapsing toward a
+nearby point reduces the MMD statistic more cheaply than reshaping variance to genuinely match
+the source distribution). The source domain's own spread also contracted somewhat over training,
+despite never receiving gradient directly --- a side effect of the shared backbone being updated
+by the target domain's loss.
+
+\section{Not yet tested (planned follow-ups)}
+
+\begin{itemize}
+    \item \textbf{\texttt{detach\_source\_features=False}} (mutual pull): letting both domains'
+    features move toward each other, to see whether it avoids the source-domain regression or
+    produces closer convergence.
+    \item \textbf{Detection loss on both domains simultaneously} (plus MMD): a fuller
+    joint-objective variant, not yet implemented in the model.
+    \item \textbf{Reversed size pairing}: pretrain on the \emph{full} dataset (source), adapt
+    into the \emph{small} subsampled dataset (target) --- the mirror image of the current setup,
+    closer to ``lots of cheap data helps a domain with scarce data.''
+\end{itemize}
+
+\end{document}
