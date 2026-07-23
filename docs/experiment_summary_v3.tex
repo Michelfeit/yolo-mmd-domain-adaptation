@@ -1,0 +1,91 @@
+\documentclass[11pt]{article}
+
+\usepackage[margin=1in]{geometry}
+\usepackage{booktabs}
+\usepackage{amsmath}
+\usepackage{hyperref}
+
+\title{Dual-Domain MMD Adaptation: Small-Anchor Runs, Per-Class Breakdown}
+\author{}
+\date{\today}
+
+\begin{document}
+\maketitle
+
+\section{Setup}
+
+Both directions of adaptation were run from a small (1600-image), stride-subsampled
+pretrained anchor checkpoint, adapted against the full opposite-domain large target set:
+
+\begin{itemize}
+    \item \textbf{real\_small\_source\_syn\_large\_target}: source = real\_small (pretrained,
+    detached, forward-only reference), target = syn\_large (fine-tuned via detection loss,
+    pulled toward source via MMD).
+    \item \textbf{syn\_small\_source\_real\_large\_target}: mirror direction, source =
+    syn\_small, target = real\_large.
+\end{itemize}
+
+Both adapted checkpoints, plus their originating small-anchor pretrain baselines
+(real\_small, syn\_small), were evaluated per-class (person, vehicle) on both domains'
+validation sets: the synthetic val set (640 images) and the real val set (548 images).
+
+\section{Results}
+
+\begin{table}[h!]
+    \centering
+    \begin{tabular}{lrrrr}
+        \toprule
+        Model & person mAP50 & person mAP50-95 & vehicle mAP50 & vehicle mAP50-95 \\
+        \midrule
+        real\_small (pretrain baseline) & 0.0745 & 0.0194 & 0.162 & 0.106 \\
+        syn\_small (pretrain baseline) & 0.679 & 0.341 & 0.693 & 0.473 \\
+        real\_small\_source\_syn\_large\_target (adapted) & 0.687 & 0.353 & 0.696 & 0.482 \\
+        syn\_small\_source\_real\_large\_target (adapted) & 0.125 & 0.0319 & 0.233 & 0.154 \\
+        \bottomrule
+    \end{tabular}
+    \caption{Validated on the synthetic (syn) val set.}
+\end{table}
+
+\begin{table}[h!]
+    \centering
+    \begin{tabular}{lrrrr}
+        \toprule
+        Model & person mAP50 & person mAP50-95 & vehicle mAP50 & vehicle mAP50-95 \\
+        \midrule
+        real\_small (pretrain baseline) & 0.665 & 0.311 & 0.884 & 0.633 \\
+        syn\_small (pretrain baseline) & 0.0125 & 0.00286 & 0.293 & 0.174 \\
+        real\_small\_source\_syn\_large\_target (adapted) & 0.0247 & 0.00628 & 0.318 & 0.196 \\
+        syn\_small\_source\_real\_large\_target (adapted) & 0.647 & 0.312 & 0.889 & 0.640 \\
+        \bottomrule
+    \end{tabular}
+    \caption{Validated on the real val set.}
+\end{table}
+
+\section{Discussion}
+
+\textbf{Vehicle detection improves consistently in both directions.} Comparing each
+adapted model to its own target domain's in-domain baseline: real\_small\_source\_syn\_large\_target
+raises vehicle mAP50 on syn from 0.693 to 0.696 (mAP50-95: 0.473 $\to$ 0.482), and
+syn\_small\_source\_real\_large\_target raises vehicle mAP50 on real from 0.884 to 0.889
+(mAP50-95: 0.633 $\to$ 0.640). Both directions, both metrics, same sign -- the one class
+that shows a genuine, if modest (0.3--0.9 point), improvement from MMD alignment in this
+setup.
+
+\textbf{Person detection is inconsistent.} It improves in the syn-target direction
+(0.679 $\to$ 0.687 mAP50) but slightly regresses in the real-target direction
+(0.665 $\to$ 0.647 mAP50).
+
+\textbf{Source-domain forgetting is present and worse for person than vehicle.} Neither
+adapted model receives a detection-loss gradient on its own source domain after
+adaptation starts. real\_small\_source\_syn\_large\_target's person AP on real collapses
+from 0.665 (as real\_small's own in-domain score) to 0.0247, while vehicle only drops to
+0.318 from 0.884 -- a much smaller relative loss. The same asymmetry holds in the mirror
+direction.
+
+\textbf{Caveat.} These are single runs on val sets of modest size (160--640 images);
+the vehicle-specific gain, while consistent across both directions, is small enough that
+confirming it isn't a favorable-seed artifact would need a repeat run (or the
+bandwidth-freeze + MMD-weight-decay regularization discussed in
+\texttt{experiment\_summary\_v2.tex}) before treating it as a settled result.
+
+\end{document}

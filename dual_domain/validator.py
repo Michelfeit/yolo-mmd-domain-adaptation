@@ -28,7 +28,13 @@ class DualDomainDetectionValidator(DetectionValidator):
 
     def update_metrics(self, preds: Any, batch: dict[str, Any]) -> None:
         feat_target = self._dd_model._captured_features
-        self._dd_model.predict(self._source_batch["img"])
+        # This extra source-domain forward pass runs outside the autocast context the
+        # main (target-domain) forward pass gets from the stock validation loop, so it
+        # needs to match the model's actual weight dtype explicitly -- otherwise a
+        # fp16-preprocessed batch against fp32 (or vice versa) weights crashes in the
+        # first conv layer.
+        model_dtype = next(self._dd_model.parameters()).dtype
+        self._dd_model.predict(self._source_batch["img"].to(model_dtype))
         feat_source = self._dd_model._captured_features
         _, distance = self._dd_model._mmd(feat_source, feat_target)
         self._mmd_distances.append(distance.detach())

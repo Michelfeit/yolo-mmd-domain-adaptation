@@ -1,0 +1,7 @@
+path: /mnt/15TB-NVME/chr65046/datasets/real_large
+
+train: images/train
+
+val: images/val
+
+names: [person, vehicle]

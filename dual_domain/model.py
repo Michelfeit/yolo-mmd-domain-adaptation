@@ -30,15 +30,15 @@ class DualDomainDetectionModel(DetectionModel):
     def _capture_hook(self, module: torch.nn.Module, inputs: Any, output: torch.Tensor) -> None:
         self._captured_features = output
 
-    def loss(self, batch: dict[str, Any], preds: Any = None) -> tuple[torch.Tensor, torch.Tensor]:
+    def loss(self, batch: dict[str, Any], preds: Any = None) -> tuple[torch.Tensor, dict[str, torch.Tensor]]:
         if "domain_target" not in batch:
             # Plain single-domain call (e.g. stock validation forward). Pad a zero
-            # "mmd_distance" component so loss_items stays the same length as the
-            # dual-domain path below — callers like BaseValidator preallocate their
-            # running-loss accumulator from this shape and would otherwise size-mismatch.
+            # "mmd_distance" entry so loss_items has the same keys as the dual-domain
+            # path below — BaseValidator preallocates its running-loss accumulator
+            # from this dict's keys and would otherwise KeyError on later batches.
             loss, loss_items = super().loss(batch, preds)
-            pad = loss_items.new_zeros(1)
-            return torch.cat([loss.view(-1), pad]), torch.cat([loss_items.view(-1), pad])
+            loss_items = {**loss_items, "mmd_distance": loss.new_zeros(())}
+            return torch.cat([loss.view(-1), loss.new_zeros(1)]), loss_items
 
         loss, loss_items = super().loss(batch["domain_target"], preds)
         feat_target = self._captured_features
@@ -53,5 +53,5 @@ class DualDomainDetectionModel(DetectionModel):
 
         mmd, distance = self._mmd(feat_source, feat_target)
         loss = torch.cat([loss.view(-1), (self.mmd_weight * mmd).view(1)])
-        loss_items = torch.cat([loss_items.view(-1), distance.detach().view(1)])
+        loss_items = {**loss_items, "mmd_distance": distance.detach()}
         return loss, loss_items

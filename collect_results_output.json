@@ -1,0 +1,34 @@
+{
+  "real_small (pretrain baseline)||syn": [
+    0.11806125597321582,
+    0.06259493870492802
+  ],
+  "real_small (pretrain baseline)||real": [
+    0.7743177949886488,
+    0.4720249931571151
+  ],
+  "syn_small (pretrain baseline)||syn": [
+    0.68582563866661,
+    0.4070273767930511
+  ],
+  "syn_small (pretrain baseline)||real": [
+    0.15278791070479777,
+    0.08853493032546063
+  ],
+  "real_small_source_syn_large_target (adapted)||syn": [
+    0.6915774815812551,
+    0.4174967033990661
+  ],
+  "real_small_source_syn_large_target (adapted)||real": [
+    0.17156760848177025,
+    0.10096515133414985
+  ],
+  "syn_small_source_real_large_target (adapted)||syn": [
+    0.17879431992867617,
+    0.0929797150255406
+  ],
+  "syn_small_source_real_large_target (adapted)||real": [
+    0.7681107946755876,
+    0.4758122136404726
+  ]
+}
