@@ -1,0 +1,121 @@
+\documentclass[11pt]{article}
+
+\usepackage[margin=1in]{geometry}
+\usepackage{booktabs}
+\usepackage{amsmath}
+\usepackage{hyperref}
+
+\title{Dual-Domain MMD Adaptation: Large-Source, Small-Target Runs vs.\ a No-MMD
+Fine-Tune Control}
+\author{}
+\date{\today}
+
+\begin{document}
+\maketitle
+
+\section{Setup}
+
+Both directions of adaptation were run from a large (full-size) pretrained checkpoint,
+fine-tuned against the small opposite-domain target set:
+
+\begin{itemize}
+    \item \textbf{real\_large\_source\_syn\_small\_target}: source = real\_large
+    (pretrained, detached, forward-only reference), target = syn\_small (fine-tuned via
+    detection loss, pulled toward source via MMD). 50 epochs.
+    \item \textbf{syn\_large\_source\_real\_small\_target}: mirror direction, source =
+    syn\_large, target = real\_small. 50 epochs.
+\end{itemize}
+
+For each direction, a no-MMD control was run as a plain continued fine-tune from the
+same starting checkpoint, on the same small target set, with no MMD term and no source
+batches at all:
+
+\begin{itemize}
+    \item \textbf{syn\_small\_from\_real\_large}: plain fine-tune of real\_large's
+    checkpoint on syn\_small only. 100 epochs.
+    \item \textbf{real\_small\_from\_syn\_large}: plain fine-tune of syn\_large's
+    checkpoint on real\_small only. 100 epochs.
+\end{itemize}
+
+\paragraph{Exposure-count note.} Epoch length in the MMD runs is defined by the
+\emph{source} domain (the large set), with the small target resampled randomly each
+step; at batch size 8 this works out to roughly 200$\times$ oversampling of the
+1600-image target set over 50 epochs. The no-MMD controls, training directly on the
+small target set, get exactly 100$\times$ exposure over their 100 epochs. The MMD runs
+therefore received \emph{more}, not less, total exposure to the target set than their
+no-MMD counterparts -- so the comparison below is not biased in the no-MMD control's
+favor.
+
+\section{Results}
+
+\begin{table}[h!]
+    \centering
+    \begin{tabular}{lrrrr}
+        \toprule
+        Model & person mAP50 & person mAP50-95 & vehicle mAP50 & vehicle mAP50-95 \\
+        \midrule
+        real\_large\_source\_syn\_small\_target (MMD) & 0.693 & 0.357 & 0.697 & 0.483 \\
+        syn\_small\_from\_real\_large (no-MMD) & 0.686 & 0.354 & 0.693 & 0.484 \\
+        \midrule
+        syn\_large\_source\_real\_small\_target (MMD) & 0.111 & 0.0266 & 0.214 & 0.138 \\
+        real\_small\_from\_syn\_large (no-MMD) & 0.129 & 0.0349 & 0.222 & 0.146 \\
+        \bottomrule
+    \end{tabular}
+    \caption{Validated on the synthetic (syn) val set. Top pair: syn\_small is the
+    target domain (the direct MMD-vs-no-MMD comparison of interest). Bottom pair:
+    syn is the source (forgotten) domain for that direction.}
+\end{table}
+
+\begin{table}[h!]
+    \centering
+    \begin{tabular}{lrrrr}
+        \toprule
+        Model & person mAP50 & person mAP50-95 & vehicle mAP50 & vehicle mAP50-95 \\
+        \midrule
+        syn\_large\_source\_real\_small\_target (MMD) & 0.642 & 0.296 & 0.877 & 0.625 \\
+        real\_small\_from\_syn\_large (no-MMD) & 0.644 & 0.303 & 0.877 & 0.626 \\
+        \midrule
+        real\_large\_source\_syn\_small\_target (MMD) & 0.028 & 0.00748 & 0.340 & 0.205 \\
+        syn\_small\_from\_real\_large (no-MMD) & 0.0146 & 0.00418 & 0.361 & 0.219 \\
+        \bottomrule
+    \end{tabular}
+    \caption{Validated on the real val set. Top pair: real\_small is the target domain
+    (the direct comparison of interest). Bottom pair: real is the source (forgotten)
+    domain for that direction.}
+\end{table}
+
+\section{Discussion}
+
+\textbf{No visible MMD benefit on the target-domain class that matters most.} On the
+metric of primary interest -- vehicle mAP on whichever domain is actually being
+fine-tuned for -- the MMD and no-MMD runs are essentially indistinguishable in both
+directions: 0.877/0.625 vs.\ 0.877/0.626 (real, direction 1) and 0.697/0.483 vs.\
+0.693/0.484 (syn, direction 2). The tiny edge that exists flips sign between the two
+directions (no-MMD marginally ahead in direction 1, MMD marginally ahead in direction
+2), consistent with run-to-run noise rather than a systematic effect.
+
+\textbf{This contrasts with the small-source/large-target regime.} In that earlier
+setup (see \texttt{experiment\_summary\_v3.tex}), MMD showed a small but consistent
+vehicle-mAP improvement over the target domain's own in-domain baseline, in both
+directions. Here, with the roles reversed (large source, small target), that benefit
+does not appear.
+
+\textbf{A plausible explanation.} MMD's contribution may be tied to how much direct,
+diverse target-domain data the model actually trains on. When the target set is large
+and gets extensive direct exposure (small-source/large-target regime), MMD's
+feature-space regularization has room to meaningfully shape the shared backbone. When
+the target set is small and relies on heavy resampling with the same $\sim$1600 images
+(large-source/small-target regime), plain fine-tuning on that same scarce set already
+extracts what there is to extract, and the added MMD machinery does not provide a
+further edge -- despite the MMD runs here having received \emph{more} total exposure to
+the target set (via oversampling) than the no-MMD controls, not less.
+
+\textbf{Caveats.} These are single runs on val sets of modest size (160--640 images);
+the MMD runs used 50 epochs against the no-MMD controls' 100, and while the
+oversampling arithmetic means MMD still saw more total target-image draws, epoch count
+and optimizer-schedule details (learning-rate decay shape in particular) were not
+otherwise matched. A repeat run, or matching total step count exactly rather than just
+approximately, would be needed before treating "no MMD benefit in this regime" as a
+settled result.
+
+\end{document}
