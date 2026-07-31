@@ -1,0 +1,14 @@
+# Dual-domain adaptation: source = syn_xlarge (already pretrained on, forward-only
+# for MMD, the anchor), target = real_small (gets the detection loss + is
+# feature-aligned toward source). Pair with the checkpoint from
+# configs/pretrain/syn_xlarge.yaml.
+
+source:
+  train: /mnt/15TB-NVME/chr65046/datasets/syn_xlarge/images/train
+  val: /mnt/15TB-NVME/chr65046/datasets/syn_xlarge/images/val
+
+target:
+  train: /mnt/15TB-NVME/chr65046/datasets/real_small/images/train
+  val: /mnt/15TB-NVME/chr65046/datasets/real_small/images/val
+
+names: [person, vehicle]

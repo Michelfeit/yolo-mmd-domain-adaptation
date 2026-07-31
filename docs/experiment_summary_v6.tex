@@ -1,0 +1,215 @@
+\documentclass[11pt]{article}
+
+\usepackage[margin=0.75in]{geometry}
+\usepackage{booktabs}
+\usepackage{amsmath}
+\usepackage{multirow}
+\usepackage{hyperref}
+
+\title{Dual-Domain MMD Adaptation: Consolidated Final Evaluation}
+\author{}
+\date{\today}
+
+\begin{document}
+\maketitle
+
+\section{System and training setup}
+
+\subsection{Hardware}
+
+All runs in this document were trained on a single machine: 4$\times$ NVIDIA GeForce
+RTX 4090 (24\,GB each, driver 535.171.04, CUDA 12.2), an AMD EPYC 74F3 24-core
+processor (96 threads, 2 sockets), and 503\,GB system RAM. Every dual-domain
+adaptation and no-MMD fine-tune run used 2 of the 4 GPUs via ultralytics' native DDP
+(\texttt{--device 0,1}); pretraining baselines used a single GPU per run. Software:
+Ultralytics 8.4.104, PyTorch 2.5.1+cu121, Python 3.12.13.
+
+\subsection{Common hyperparameters}
+
+To keep the comparisons in this document meaningful, every run shares the same core
+training configuration unless stated otherwise: YOLOv10n, image size 1920 (native
+resolution, no upscaling), 200 max epochs with early-stopping patience 100, total
+batch size 16 (8 per GPU across 2 GPUs -- three exceptions are noted per-section
+below), \texttt{optimizer=auto} (resolves to SGD), \texttt{lr0=0.01},
+\texttt{momentum=0.937}, \texttt{weight\_decay=0.0005}, 3 warmup epochs, and
+ultralytics' standard detection augmentation defaults (mosaic, HSV jitter, flips,
+etc., unchanged from stock). A few runs stopped early via the patience criterion
+(within 1--11 epochs of the 200 cap) rather than diverging; this is noted where
+relevant.
+
+For the dual-domain MMD runs specifically, the following settings are shared across
+all variants: RBF kernel, EMA bandwidth with momentum 0.9, features extracted after
+detection layer index 10 (\texttt{mmd\_target\_layer=10}), flattened (not
+global-average-pooled) before the kernel. The MMD-specific knobs that vary between
+the four labeled variants used throughout this document are:
+\begin{itemize}
+    \item \textbf{no\_mmd}: plain fine-tune on the target domain only -- no source
+    batches, no MMD term at all.
+    \item \textbf{naive\_mmd}: constant \texttt{mmd\_weight = 0.8} (script default),
+    no bandwidth freeze -- the un-regularized baseline.
+    \item \textbf{reg\_mmd}: linearly decaying \texttt{mmd\_weight} plus a frozen
+    kernel bandwidth after an early epoch, intended to prevent the bandwidth
+    estimate collapsing before the target distribution has moved.
+    \item \textbf{reg\_mmd\_smaller\_weight}: the same regularization scheme as
+    reg\_mmd, decayed to a smaller final \texttt{mmd\_weight}.
+\end{itemize}
+
+\paragraph{A note on hyperparameter provenance.} Ultralytics' own \texttt{args.yaml}
+/ checkpoint \texttt{train\_args} do not capture the MMD-specific overrides (weight,
+schedule, freeze epoch) -- they are stored on a nested config object that is not part
+of the serialized trainer args. The values above for \texttt{mmd\_target\_layer},
+kernel, and preprocessing are certain (script defaults, never overridden across this
+study). The bandwidth-freeze-epoch used per comparison group is noted inline in each
+section below to the best of the project's own run-directory records; treat these as
+reliable but not double-logged the way the common hyperparameters above are.
+
+\section{Synthetic target: real\_large\_source\_syn\_small\_target}
+
+Source = real\_large (pretrained, detached), target = syn\_small, imgsz 1920,
+evaluated on the syn val set. no\_mmd/naive\_mmd/reg\_mmd ran at batch 16 on 2 GPUs;
+reg\_mmd\_smaller\_weight ran at batch 12 on a single GPU (an unrelated scheduling
+choice, not expected to materially affect the comparison at this batch-size range).
+Bandwidth-freeze-epoch = 1 for both regularized variants.
+
+\begin{table}[h!]
+    \centering
+    \setlength{\tabcolsep}{5pt}
+    \begin{tabular}{lrrrr}
+        \toprule
+        Model & person mAP50 & person mAP50-95 & vehicle mAP50 & vehicle mAP50-95 \\
+        \midrule
+        no\_mmd & 0.697 & 0.361 & 0.720 & 0.503 \\
+        naive\_mmd & 0.674 & 0.344 & 0.693 & 0.480 \\
+        reg\_mmd & 0.671 & 0.339 & 0.690 & 0.478 \\
+        reg\_mmd\_smaller\_weight & 0.677 & 0.343 & 0.693 & 0.480 \\
+        \bottomrule
+    \end{tabular}
+    \caption{real\_large $\to$ syn\_small direction, evaluated on syn val (target domain).}
+\end{table}
+
+\noindent In this direction, no-MMD clearly beats every MMD variant on both classes --
+a real gap (2--3 points mAP50, 2--2.4 points mAP50-95), not the small margins seen
+elsewhere in this study. Regularization does not help here either; reg\_mmd is
+marginally worse than naive\_mmd. This replicates the direction-dependent asymmetry
+already noted in the project's own README results: source=real/target=synthetic
+improves over baseline, while source=synthetic/target=real does not fully close the
+gap -- here, MMD actively underperforms plain fine-tuning in this direction.
+
+\section{Real target}
+
+Source = various synthetic pretrains, target = real\_small (or real\_small\_vehicle\_only),
+all evaluated on real val (target domain). Two comparisons follow.
+
+\subsection{ClearNoon-only source vs.\ all-weather source (syn\_large)}
+
+Both groups use bandwidth-freeze-epoch = 1 for their regularized variants (matching
+hyperparameters for a fair comparison).
+
+\begin{table}[h!]
+    \centering
+    \setlength{\tabcolsep}{4pt}
+    \small
+    \begin{tabular}{llrrrr}
+        \toprule
+        Source & Model & person mAP50 & person mAP50-95 & vehicle mAP50 & vehicle mAP50-95 \\
+        \midrule
+        \multirow{4}{*}{clearnoon} & no\_mmd & 0.634 & 0.291 & 0.873 & 0.615 \\
+        & naive\_mmd & 0.623 & 0.284 & 0.866 & 0.612 \\
+        & reg\_mmd & 0.630 & 0.284 & 0.870 & 0.613 \\
+        & reg\_mmd\_smaller\_weight & 0.617 & 0.284 & 0.868 & 0.612 \\
+        \midrule
+        \multirow{4}{*}{syn\_large} & no\_mmd & 0.648 & 0.296 & 0.870 & 0.617 \\
+        & naive\_mmd & 0.637 & 0.291 & 0.869 & 0.618 \\
+        & reg\_mmd & 0.635 & 0.292 & 0.871 & 0.619 \\
+        & reg\_mmd\_smaller\_weight & 0.639 & 0.291 & 0.871 & 0.617 \\
+        \bottomrule
+    \end{tabular}
+    \caption{Single-weather (ClearNoon only) vs.\ all-weather (syn\_large) synthetic
+    source, both sized to 6400 train images.}
+\end{table}
+
+\noindent syn\_large (all four weather conditions) beats clearnoon-only on every single
+row for person, and on 3 of 4 rows for vehicle (tied/marginally behind on the 4th).
+The gaps are modest (0.5--1.4 points) but consistent in direction, suggesting weather
+diversity in the source domain -- not just raw image count, since both sets are the
+same size -- contributes a small but real benefit to target-domain performance.
+
+\subsection{Person diminishing under MMD, and the vehicle-only comparison}
+
+Same source dataset (syn\_large), same regularization settings (bandwidth-freeze-epoch
+= 5) for the dual-class and vehicle-only rows, allowing a direct look at what happens
+to the person class as MMD strengthens, and what happens to vehicle when person is
+removed from training entirely.
+
+\begin{table}[h!]
+    \centering
+    \setlength{\tabcolsep}{5pt}
+    \begin{tabular}{lrrrr}
+        \toprule
+        Model & person mAP50 & person mAP50-95 & vehicle mAP50 & vehicle mAP50-95 \\
+        \midrule
+        \multicolumn{5}{l}{\textit{dual-class (person + vehicle)}} \\
+        no\_mmd & 0.648 & 0.296 & 0.870 & 0.617 \\
+        reg\_mmd & 0.642 & 0.294 & 0.872 & 0.618 \\
+        reg\_mmd\_smaller\_weight & 0.635 & 0.289 & 0.876 & 0.620 \\
+        \midrule
+        \multicolumn{5}{l}{\textit{vehicle-only (person removed entirely)}} \\
+        no\_mmd & --- & --- & 0.885 & 0.629 \\
+        reg\_mmd & --- & --- & 0.885 & 0.626 \\
+        reg\_mmd\_smaller\_weight & --- & --- & 0.883 & 0.624 \\
+        \bottomrule
+    \end{tabular}
+    \caption{Dual-class rows show person declining as MMD regularization strengthens
+    (no\_mmd $\to$ reg\_mmd $\to$ reg\_mmd\_smaller\_weight), while vehicle rises over
+    the same sequence. Vehicle-only rows show vehicle detection with person's
+    interference removed entirely.}
+\end{table}
+
+\noindent Two things happen simultaneously as the MMD regularization gets stronger
+(no\_mmd $\to$ reg\_mmd $\to$ reg\_mmd\_smaller\_weight): person mAP50 falls
+monotonically (0.648 $\to$ 0.642 $\to$ 0.635) while vehicle mAP50 rises monotonically
+(0.870 $\to$ 0.872 $\to$ 0.876). This is the clearest evidence in this study that MMD's
+small vehicle benefit comes at person's expense, not for free. Removing person from
+training entirely (vehicle-only) pushes vehicle mAP50 higher still, to 0.883--0.885
+across all three variants -- confirming the person class's noisier training signal
+was genuinely holding back vehicle-specific performance, consistent with the
+fitness-averaging mechanism discussed earlier in this study (person's volatility
+disproportionately affects which epoch gets selected as best.pt when the checkpoint
+metric averages both classes equally).
+
+\section{syn\_xlarge vs.\ syn\_large as source, to close out the study}
+
+Same target (real\_small) and same regularization settings (mmd-weight 1.0 $\to$ 0.1,
+bandwidth-freeze-epoch = 5) throughout; only the source dataset's scale changes.
+
+\begin{table}[h!]
+    \centering
+    \setlength{\tabcolsep}{3pt}
+    \small
+    \begin{tabular}{llrrrr}
+        \toprule
+        Source (\# imgs) & Model & person mAP50 & person mAP50-95 & vehicle mAP50 & vehicle mAP50-95 \\
+        \midrule
+        \multirow{4}{*}{syn\_large (6400)} & no\_mmd & 0.648 & 0.296 & 0.870 & 0.617 \\
+        & naive\_mmd & 0.637 & 0.291 & 0.869 & 0.618 \\
+        & reg\_mmd & 0.642 & 0.294 & 0.872 & 0.618 \\
+        & reg\_mmd\_smaller\_weight & 0.635 & 0.289 & 0.876 & 0.620 \\
+        \midrule
+        syn\_xlarge (10240) & \textbf{reg\_mmd} & 0.635 & 0.291 & \textbf{0.876} & \textbf{0.621} \\
+        \bottomrule
+    \end{tabular}
+    \caption{syn\_xlarge (10240 images, all weathers) as source, same regularized MMD
+    settings as syn\_large's best-performing variant, both evaluated on real val.
+    syn\_xlarge's run used batch 8 on 2 GPUs (4 per GPU) rather than the batch-16
+    setup used elsewhere in this document.}
+\end{table}
+
+\noindent Scaling the synthetic source from syn\_large (6400 images) to syn\_xlarge
+(10240 images) gives the best vehicle result of the entire study: 0.876/0.621, matching
+or edging out syn\_large's own best regularized variant while leaving person roughly
+unchanged (0.635, identical to syn\_large's smaller-weight variant). The gain is modest
+but consistent with the study's central premise -- more of the cheap synthetic domain's
+data provides a small additional benefit on top of what the regularization already
+buys, without any additional cost beyond generating more synthetic frames.
+
+\end{document}

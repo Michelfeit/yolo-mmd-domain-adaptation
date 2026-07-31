@@ -9,21 +9,24 @@ from ultralytics.data.dataset import YOLODataset
 
 
 class DualDomainYOLODataset(YOLODataset):
-    """A source-domain YOLODataset (self, via the usual __init__) paired with a second,
-    independent target-domain YOLODataset.
+    """A target-domain YOLODataset (self, via the usual __init__) paired with a second,
+    independent source-domain YOLODataset.
 
-    Epoch length is defined by the source domain. Each access draws a fresh random index
-    into the target domain, so a given source image isn't paired with the same target
-    image on every epoch (unlike a fixed `index % len(target)` cycle).
+    Epoch length is defined by the target domain -- the one actually getting the
+    detection loss + MMD alignment -- so a full pass over it happens every epoch, same
+    as a normal single-domain training run. Each access draws a fresh random index into
+    the source domain (the fixed/detached reference, forward-only) instead of a fixed
+    `index % len(source)` cycle, so a given target image isn't paired with the same
+    source image on every epoch.
     """
 
-    def __init__(self, *args: Any, target_dataset_kwargs: dict[str, Any], **kwargs: Any):
+    def __init__(self, *args: Any, source_dataset_kwargs: dict[str, Any], **kwargs: Any):
         super().__init__(*args, **kwargs)
-        self.target_dataset = YOLODataset(**target_dataset_kwargs)
+        self.source_dataset = YOLODataset(**source_dataset_kwargs)
 
     def __getitem__(self, index: int) -> dict[str, Any]:
-        source_sample = super().__getitem__(index)
-        target_sample = self.target_dataset[random.randrange(len(self.target_dataset))]
+        target_sample = super().__getitem__(index)
+        source_sample = self.source_dataset[random.randrange(len(self.source_dataset))]
         return {"domain_source": source_sample, "domain_target": target_sample}
 
     @staticmethod

@@ -10,6 +10,8 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
+from ultralytics.utils import RANK
+
 from .pca_tracker import FeaturePCATracker
 
 
@@ -38,6 +40,14 @@ def attach_pca_tracker(
     state: dict[str, FeaturePCATracker] = {}
 
     def _fit_initial(trainer: Any) -> None:
+        # Diagnostic-only: under DDP, ultralytics calls every callback on every rank
+        # unconditionally (unlike its own built-in logging/validation code, which
+        # consistently guards with RANK in {-1, 0}). Without this guard, every rank
+        # would independently build its own tracker (including a redundant extra
+        # YOLODataset + label-cache scan) and race on writing the same csv_path --
+        # a plausible source of rank-specific crashes/hangs under multi-GPU training.
+        if RANK not in {-1, 0}:
+            return
         tracker = FeaturePCATracker(
             data=trainer.data,
             cfg=trainer.args,
@@ -50,6 +60,8 @@ def attach_pca_tracker(
         state["tracker"] = tracker
 
     def _snapshot(trainer: Any) -> None:
+        if RANK not in {-1, 0}:
+            return
         state["tracker"].snapshot(trainer.epoch + 1, trainer.model, trainer.device)
 
     trainer.add_callback("on_pretrain_routine_end", _fit_initial)

@@ -31,7 +31,8 @@ def main() -> None:
     parser.add_argument("--name", default=None, help="run name under the project dir, defaults to the data yaml's stem")
     parser.add_argument("--epochs", type=int, default=100)
     parser.add_argument("--imgsz", type=int, default=2080)
-    parser.add_argument("--batch", type=int, default=8)
+    parser.add_argument("--batch", type=int, default=8, help="TOTAL batch size across all --device GPUs, not per-GPU")
+    parser.add_argument("--device", default=None, help="e.g. 0,1 for multi-GPU DDP; omit to use whatever CUDA_VISIBLE_DEVICES exposes on a single GPU")
     parser.add_argument("--project", default=None, help="defaults to runs/<model-tag>/adapt")
 
     parser.add_argument("--mmd-weight", type=float, default=0.8)
@@ -65,8 +66,9 @@ def main() -> None:
 
     name = args.name or Path(args.data).stem
     # Must be absolute: ultralytics silently nests *relative* project paths under its own
-    # default runs/<task>/ root (see get_save_dir).
-    project = args.project or str(Path(f"runs/{args.model_tag}/adapt").resolve())
+    # default runs/<task>/ root (see get_save_dir) -- applies to an explicitly-passed
+    # --project too, not just the default.
+    project = str(Path(args.project).resolve()) if args.project else str(Path(f"runs/{args.model_tag}/adapt").resolve())
 
     print(f"=== Dual-domain adaptation: {name} (starting from {args.model}) ===")
     overrides = {
@@ -75,6 +77,7 @@ def main() -> None:
         "epochs": args.epochs,
         "imgsz": args.imgsz,
         "batch": args.batch,
+        "device": args.device,
         "project": project,
         "name": name,
         "mmd": {

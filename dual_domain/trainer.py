@@ -47,8 +47,18 @@ def _maybe_freeze_bandwidth(trainer: DualDomainTrainer) -> None:
 class DualDomainTrainer(DetectionTrainer):
     def __init__(self, cfg: Any = DEFAULT_CFG, overrides: dict[str, Any] | None = None, _callbacks: Any = None):
         overrides = dict(overrides or {})
-        self.mmd_cfg = MMDConfig.from_dict(overrides.pop("mmd", None))
+        mmd_overrides = overrides.pop("mmd", None)
+        self.mmd_cfg = MMDConfig.from_dict(mmd_overrides)
         super().__init__(cfg, overrides, _callbacks)
+        # Multi-GPU DDP respawns worker processes by reconstructing this same trainer
+        # class from vars(self.args) (see ultralytics.utils.dist.generate_ddp_file) --
+        # "mmd" was popped above to avoid get_cfg's strict key validation (it isn't a
+        # recognized stock key), so without this it would silently vanish and every
+        # respawned worker would fall back to MMDConfig() defaults instead of whatever
+        # was actually requested. Attaching it directly to the already-built namespace
+        # bypasses that validation (it already ran) while still making it show up in
+        # vars(self.args) for the DDP round-trip.
+        self.args.mmd = mmd_overrides
         self.add_callback("on_train_epoch_start", _update_mmd_weight)
         self.add_callback("on_train_epoch_start", _maybe_freeze_bandwidth)
 
@@ -108,6 +118,12 @@ class DualDomainTrainer(DetectionTrainer):
         if self.best.exists():
             LOGGER.info(f"\nValidating {self.best}...")
             self.validator.args.plots = self.args.plots
-            self.metrics = self.validator(trainer=self)
-            self.metrics.pop("fitness", None)
-            self.run_callbacks("on_fit_epoch_end")
+            # Every rank must call this (DDP loss reduction inside BaseValidator.__call__
+            # needs all ranks present), but in the trainer= branch it returns a bare None
+            # on RANK > 0 (unlike the model= branch stock's own final_eval() uses, which
+            # returns {} there) -- so only rank 0 can safely post-process the result.
+            metrics = self.validator(trainer=self)
+            if RANK in {-1, 0}:
+                self.metrics = metrics
+                self.metrics.pop("fitness", None)
+                self.run_callbacks("on_fit_epoch_end")

@@ -1,0 +1,15 @@
+# Dual-domain adaptation: source = syn_large_vehicle_only (already pretrained on,
+# forward-only for MMD, the anchor), target = real_small_vehicle_only (gets the
+# detection loss + is feature-aligned toward source). Both single-class (vehicle
+# only), matching nc=1. Pair with the checkpoint from
+# configs/pretrain/syn_large_vehicle_only.yaml.
+
+source:
+  train: /mnt/15TB-NVME/chr65046/datasets/syn_large_vehicle_only/images/train
+  val: /mnt/15TB-NVME/chr65046/datasets/syn_large_vehicle_only/images/val
+
+target:
+  train: /mnt/15TB-NVME/chr65046/datasets/real_small_vehicle_only/images/train
+  val: /mnt/15TB-NVME/chr65046/datasets/real_small_vehicle_only/images/val
+
+names: [vehicle]

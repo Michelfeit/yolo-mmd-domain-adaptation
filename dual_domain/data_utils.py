@@ -88,7 +88,7 @@ def build_dual_domain_yolo_dataset(
         fraction=cfg.fraction if mode == "train" else 1.0,
     )
     return DualDomainYOLODataset(
-        img_path=data["source"][mode],
-        target_dataset_kwargs={**common_kwargs, "img_path": data["target"][mode]},
+        img_path=data["target"][mode],
+        source_dataset_kwargs={**common_kwargs, "img_path": data["source"][mode]},
         **common_kwargs,
     )

@@ -9,6 +9,7 @@ fitness/checkpoint selection.
 
 from __future__ import annotations
 
+from copy import copy
 from typing import Any
 
 import torch
@@ -17,6 +18,18 @@ from ultralytics.utils.torch_utils import unwrap_model
 
 
 class DualDomainDetectionValidator(DetectionValidator):
+    def __init__(self, dataloader: Any = None, save_dir: Any = None, args: Any = None, _callbacks: Any = None):
+        # DualDomainTrainer.get_validator() passes copy(self.args), which carries an
+        # "mmd" attribute (see DualDomainTrainer.__init__ for why) so it survives
+        # ultralytics' DDP worker-respawn round-trip. BaseValidator.__init__ re-runs
+        # that same namespace through get_cfg(), which rejects any key it doesn't
+        # recognize -- so it has to be stripped here first, same as the trainer does
+        # for its own super().__init__() call.
+        if args is not None and hasattr(args, "mmd"):
+            args = copy(args)
+            del args.mmd
+        super().__init__(dataloader=dataloader, save_dir=save_dir, args=args, _callbacks=_callbacks)
+
     def preprocess(self, batch: dict[str, Any]) -> dict[str, Any]:
         self._source_batch = super().preprocess(batch["domain_source"])
         return super().preprocess(batch["domain_target"])
