@@ -69,7 +69,7 @@ Source = real\_large (pretrained, detached), target = syn\_small, imgsz 1920,
 evaluated on the syn val set. no\_mmd/naive\_mmd/reg\_mmd ran at batch 16 on 2 GPUs;
 reg\_mmd\_smaller\_weight ran at batch 12 on a single GPU (an unrelated scheduling
 choice, not expected to materially affect the comparison at this batch-size range).
-Bandwidth-freeze-epoch = 1 for both regularized variants.
+Bandwidth-freeze-epoch = 5 for both regularized variants.
 
 \begin{table}[h!]
     \centering
