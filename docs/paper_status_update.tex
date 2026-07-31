@@ -1,0 +1,218 @@
+\documentclass[11pt]{article}
+
+\usepackage[margin=1in]{geometry}
+\usepackage{booktabs}
+\usepackage{amsmath}
+\usepackage{hyperref}
+
+\title{Dual-Domain MMD Adaptation: Current Paper Status and Remaining Work}
+\author{}
+\date{\today}
+
+\begin{document}
+\maketitle
+
+\section{The story so far}
+
+\textbf{Question.} Can cheap, domain-shifted synthetic aerial imagery improve real-domain
+(VisDrone) object detection via feature-level alignment (MMD) and under what conditions?
+
+\textbf{Method.} A YOLOv10 detector extended with a two-stage dual-domain pipeline: standard
+pretraining on a \emph{source} domain, then fine-tuning on a \emph{target} domain using the
+target's own detection loss plus an MMD term aligning backbone features between the two
+domains (RBF kernel, EMA-tracked bandwidth). The source domain's forward pass is
+gradient-detached, so it only ever supplies a fixed feature-space reference.
+
+\textbf{Data.} Two synthetic sources are used, both CARLA-rendered: \emph{Syndrone} (single
+weather condition, vehicle annotations only) and \emph{FlyAwareV2} (four weather conditions --
+clear day, clear night, rain, fog -- vehicle and person annotations). FlyAwareV2 ships only
+with semantic segmentation maps, so bounding boxes were derived via a clustering plus
+statistical (bell-curve) split of adjacent same-class regions -- cheaper than adapting the
+original scene-generation code to emit instance boxes directly, at the cost of imperfect
+instance separation for touching objects. Only the 50m-height imagery is used; 20m/80m were
+omitted since the box-splitting heuristic needs height-dependent object-size priors not yet
+derived.
+
+\textbf{Regularization.} The first attempts used MMD ``as is'': a fixed-ish loss weight, and a
+kernel bandwidth that is re-estimated every training step as a moving average of how far apart
+the two domains' features currently are. The problem, diagnosed by visualizing the feature
+space over training (via a fixed PCA basis, fit once and never refit): as the two domains'
+features are pulled closer together, that bandwidth estimate shrinks too -- which sharpens the
+kernel and makes it \emph{cheaper} for the optimizer to keep collapsing the features into a
+tight cluster than to actually reshape the target distribution to match the source's. In other
+words, the alignment mechanism was quietly rewarding a degenerate shortcut instead of genuine
+alignment, and this got worse as training went on. The fix that helped: (1) \textbf{freeze the
+bandwidth} after a short warm-up period, so it stops chasing the collapsing features, and (2)
+\textbf{decay the MMD loss weight} linearly over training, so alignment pressure is strongest
+early (before collapse can set in) and weaker later. Both together break the feedback loop; see
+Section~2 for what this recovers.
+
+\textbf{Findings so far.} In the practically relevant regime -- a large, cheap synthetic
+source fine-tuned against a small real target, i.e.\ ``abundant cheap synthetic data helping
+scarce real labels'' -- naive MMD showed no benefit over a plain fine-tune. Adding two
+regularization mechanisms (bandwidth freeze + linear MMD-weight decay) recovered a small,
+consistent target-domain benefit. Comparing the two synthetic sources under this same regime,
+Syndrone (narrow, single-weather) does not clearly beat its own in-domain baseline even with
+regularization, while FlyAwareV2 (diverse -- weather, occlusion, crowding) does. The working
+hypothesis is that MMD's benefit depends on the synthetic source contributing genuine
+additional intra-class variance beyond what the real domain already covers -- but this has not
+yet been tested under matched conditions (see Section~\ref{sec:todos}).
+
+\section{Headline result: regularization recovers a benefit (FlyAwareV2, large source / small
+target)}
+
+\begin{table}[h!]
+    \centering
+    \begin{tabular}{lrrrr}
+        \toprule
+        Model & v mAP50 & v mAP50-95 & p mAP50 & p mAP50-95 \\
+        \midrule
+        no-MMD (plain fine-tune control) & 0.877 & 0.626 & 0.644 & 0.303 \\
+        unregularized MMD (constant weight, no freeze) & 0.877 & 0.625 & 0.642 & 0.296 \\
+        regularized MMD & 0.881 & 0.628 & 0.649 & 0.300 \\
+        regularized MMD, smaller decaying weight & 0.879 & 0.625 & 0.646 & 0.302 \\
+        \textbf{regularized, smaller weight, 100 epochs (best)} & \textbf{0.882} & \textbf{0.630} & \textbf{0.651} & \textbf{0.304} \\
+        \bottomrule
+    \end{tabular}
+    \caption{Validated on the real val set (target domain, the metric of primary interest).
+    Unregularized MMD is statistically indistinguishable from the no-MMD control; all three
+    regularized variants edge it out, and the best configuration wins on both classes.}
+\end{table}
+
+\textbf{The problem regularization fixes.} The RBF kernel's bandwidth is estimated as an
+exponential moving average of the batch's mean pairwise feature distance, updated every step.
+As the two domains' features are pulled together by MMD, this estimate shrinks too --
+sharpening the kernel and rewarding the optimizer for collapsing the representation further
+rather than genuinely matching the two distributions, a self-reinforcing feedback loop
+confirmed via fixed-basis PCA visualization of the feature space. \textbf{The fix}: freeze the
+bandwidth after a short warm-up period, and linearly decay the MMD loss weight over the course
+of training. This breaks the loop and is what produces the table above -- without it, MMD adds
+nothing in this regime.
+
+\section{Dataset comparison: Syndrone vs.\ FlyAwareV2}
+
+\begin{table}[h!]
+    \centering
+    \begin{tabular}{llrr}
+        \toprule
+        Model & Eval domain & mAP50 & mAP50-95 \\
+        \midrule
+        baseline (real, in-domain) & real & 0.896 & 0.641 \\
+        syn\_source\_real\_target (unregularized) & real (target) & 0.867 & 0.599 \\
+        syn\_source\_real\_target\_reg (regularized) & real (target) & 0.886 & 0.618 \\
+        \midrule
+        baseline (syn, in-domain) & syn & 0.758 & 0.508 \\
+        syn\_source\_real\_target (unregularized) & syn (source) & 0.568 & 0.337 \\
+        syn\_source\_real\_target\_reg (regularized) & syn (source) & 0.674 & 0.396 \\
+        \bottomrule
+    \end{tabular}
+    \caption{Syndrone as source, real as target, single class (vehicle), local machine, no
+    weather variation. Vehicle class only, since Syndrone has no other annotations.}
+\end{table}
+
+Regularization substantially recovers source-domain forgetting (0.568 $\to$ 0.674) and nudges
+target performance up slightly (0.867 $\to$ 0.886), but \textbf{even the regularized target
+result does not exceed the in-domain baseline} (0.896) -- at best, on par with training on real
+data alone, not a net improvement. This is the same practically-relevant direction and regime
+as Section~2's FlyAwareV2 result, which \emph{does} show a real edge over its own no-MMD
+control. That contrast is the basis for the diversity hypothesis in Section~1, but see
+Section~\ref{sec:todos} for why it is not yet a controlled comparison.
+
+\section{Remaining work}
+\label{sec:todos}
+
+\subsection{A note on class mismatch}
+
+Syndrone has vehicle annotations only; FlyAwareV2 and VisDrone both have vehicle and person.
+This means two separate questions need two separate experiment designs rather than one shared
+grid:
+
+\begin{itemize}
+    \item \textbf{Syndrone vs.\ FlyAwareV2 diversity comparison}: restricted to
+    \textbf{vehicle-only} training and evaluation on both sides -- the only class both sources
+    can supply, and it also removes a second confound (a multi-class model splits detection-head
+    capacity between classes, so its vehicle mAP alone isn't directly comparable to a
+    single-class model's).
+    \item \textbf{Person-interference hypothesis}: inherently FlyAwareV2-only, since Syndrone
+    cannot test it. Isolated by comparing a FlyAwareV2-source vehicle-only run against a
+    FlyAwareV2-source multi-class (vehicle + person) run, both evaluated on real vehicle mAP,
+    with batch size and regularization config matched.
+\end{itemize}
+
+\subsection{TODO 1: matched Syndrone vs.\ FlyAwareV2 comparison}
+
+The comparison in Section~3 is confounded -- the two results were produced with different
+regularization settings, possibly different batch sizes, at different points in the project.
+Needed: YOLOv10n pretrained on (1) VisDrone (done), (2) Syndrone, (3) FlyAwareV2 (done), then
+the same large-source/small-target fine-tune sweep for both synthetic sources at one fixed
+batch size, with MMD hyperparameters logged this time rather than recalled after the fact:
+no-MMD control, naive (unregularized) MMD, regularized MMD (weight config 1), regularized MMD
+(weight config 2, smaller weight).
+
+\subsection{Hypothesis 1: the person class interferes with vehicle performance}
+
+Across the regularized variants in Section~2, person mAP consistently drops while vehicle mAP
+rises, and the ``best'' model is currently selected on combined performance across both
+classes. It's possible the small, blurry synthetic person instances are dragging down model
+selection in a way that masks a cleaner vehicle-only signal. Test per the class-mismatch note
+above: FlyAwareV2-source vehicle-only vs.\ multi-class, same regularization config, compare
+vehicle mAP.
+
+\subsection{Hypothesis 2: push the synthetic:real ratio further}
+
+The current large-source/small-target setup is already asymmetric (roughly 10k synthetic to
+1.6k real, $\sim$6:1). To more aggressively test the paper's core premise -- that an abundant,
+cheap synthetic pool can compensate for scarce real labels -- push this ratio further toward
+$\sim$10:1 and see whether the target-domain benefit strengthens, weakens, or holds steady.
+
+\subsection{Final planned experiment}
+
+Vehicle-only, at full scale ($\sim$10{,}000 synthetic FlyAwareV2 images, $\sim$1{,}500 real
+VisDrone images), on both YOLOv10n and YOLOv10m, each with the four fine-tune variants (no-MMD,
+naive MMD, regularized MMD $\times$2 weight configs). This is the result intended to close out
+the paper's central claim.
+
+\section{Related work}
+
+\begin{itemize}
+    \item \textbf{Long et al., Deep Adaptation Network (DAN) / Multi-Kernel MMD} -- the
+    original MMD-in-a-deep-net domain adaptation method, and specifically the multi-kernel
+    variant designed to reduce sensitivity to kernel bandwidth choice. Directly relevant: this
+    is the standard answer to the same brittleness our bandwidth-freeze regularization
+    addresses differently.
+    \item \textbf{Tzeng et al., Deep Domain Confusion} -- earlier precursor to DAN, establishes
+    the MMD-as-a-training-loss lineage this paper sits in.
+    \item \textbf{Long et al., Joint Adaptation Networks (JAN)} -- extends MMD alignment to
+    joint distributions across layers; worth citing as a more sophisticated alternative not
+    pursued here.
+    \item \textbf{Sun \& Saenko, CORAL} -- second-order-statistics alternative to MMD;
+    contrasts our discrepancy-minimization choice against a simpler covariance-matching one.
+    \item \textbf{Ganin \& Lempitsky, DANN} -- the adversarial (gradient-reversal) alternative
+    to discrepancy-based alignment; needed to place MMD among the two dominant families of
+    feature-alignment domain adaptation.
+    \item \textbf{Chen et al., Domain Adaptive Faster R-CNN} -- adversarial domain adaptation
+    applied specifically to object detection, the closest prior work in task (detection) even
+    though it differs in alignment mechanism (adversarial vs.\ MMD).
+    \item \textbf{Richter et al., Playing for Data (GTA5); SYNTHIA} -- canonical synthetic
+    driving-scene datasets for perception, establishing the sim-to-real-for-perception lineage
+    this paper extends to the aerial setting.
+    \item \textbf{Dosovitskiy et al., CARLA} -- the simulator underlying both Syndrone and
+    FlyAwareV2; cited directly as the data source.
+    \item \textbf{Tobin et al., domain randomization} -- an alternative synthetic-data strategy
+    (randomize simulation parameters rather than align features post-hoc) not used here; useful
+    as a contrasting future-work direction.
+    \item \textbf{Zhu et al., VisDrone} -- the real-domain benchmark and data source.
+    \item \textbf{UAVDT, DOTA} -- sibling aerial-imagery detection benchmarks, cited briefly to
+    place VisDrone among them.
+    \item \textbf{Akyon et al., SAHI} -- the standard tiling-based alternative to large input
+    resolution for small-object detection in aerial imagery; relevant to justify why this work
+    uses a large \texttt{imgsz} instead of slicing.
+    \item \textbf{Syndrone and FlyAwareV2 original papers} -- cited directly as the data
+    sources; worth checking whether their authors already report a sim-to-real gap on the same
+    data, as a number to compare against.
+    \item \textbf{Connected-components / watershed / clustering-based instance separation
+    literature} -- situates the segmentation-to-bounding-box conversion method (used for
+    FlyAwareV2) as an instance of a known problem rather than an ad hoc heuristic.
+\end{itemize}
+
+\end{document}
