@@ -74,18 +74,32 @@ the first time this study has used \texttt{real\_large} rather than
     \centering
     \begin{tabular}{lrrrr}
         \toprule
-        Model & \multicolumn{2}{c}{real\_large val} & \multicolumn{2}{c}{real\_test\_heldout} \\
-        & mAP50 & mAP50-95 & mAP50 & mAP50-95 \\
+        Model & person mAP50 & person mAP50-95 & vehicle mAP50 & vehicle mAP50-95 \\
         \midrule
-        real\_large\_1920 (solo, COCO-direct) & 0.805 & 0.505 & 0.617 & 0.349 \\
-        syn\_xlarge\_source\_real\_large\_target\_reg\_fr5 (freeze=6) & 0.790 & 0.496 & 0.598 & 0.339 \\
-        \quad{}\_stronger\_weight-5 (120ep, freeze=25) & \textbf{0.802} & \textbf{0.501} & \textbf{0.606} & \textbf{0.342} \\
+        real\_large\_1920 (solo, COCO-direct) & 0.703 & 0.345 & 0.907 & 0.665 \\
+        syn\_xlarge\_source\_real\_large\_target\_reg\_fr5 (freeze=6) & 0.677 & 0.332 & 0.903 & 0.659 \\
+        \quad{}\_stronger\_weight-5 (120ep, freeze=25) & 0.699 & 0.340 & \textbf{0.906} & \textbf{0.661} \\
         \bottomrule
     \end{tabular}
-    \caption{\texttt{real\_large} as MMD target, source \texttt{syn\_xlarge}
-    (YOLOv10n). Solo wins on both eval sets against both MMD variants, but the
+    \caption{Evaluated on \texttt{real\_large} val (548 images).}
+\end{table}
+
+\begin{table}[h!]
+    \centering
+    \begin{tabular}{lrrrr}
+        \toprule
+        Model & person mAP50 & person mAP50-95 & vehicle mAP50 & vehicle mAP50-95 \\
+        \midrule
+        real\_large\_1920 (solo, COCO-direct) & 0.482 & 0.204 & 0.751 & 0.493 \\
+        syn\_xlarge\_source\_real\_large\_target\_reg\_fr5 (freeze=6) & 0.461 & 0.196 & 0.734 & 0.481 \\
+        \quad{}\_stronger\_weight-5 (120ep, freeze=25) & 0.469 & 0.197 & \textbf{0.743} & \textbf{0.487} \\
+        \bottomrule
+    \end{tabular}
+    \caption{Evaluated on \texttt{real\_test\_heldout} (1610 images, unseen).
+    \texttt{real\_large} as MMD target, source \texttt{syn\_xlarge} (YOLOv10n).
+    Solo wins on every column on both eval sets against both MMD variants, but the
     stronger-weight variant narrows the gap to the tightest margin seen anywhere in
-    this study (0.003--0.007 mAP50-95).}
+    this study (0.003--0.007 mAP50-95 on the all-class average).}
 \end{table}
 
 \noindent The matched no-MMD control for this regime (plain fine-tune of the
