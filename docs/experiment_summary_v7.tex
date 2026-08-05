@@ -1,0 +1,174 @@
+\documentclass[11pt]{article}
+
+\usepackage[margin=0.75in]{geometry}
+\usepackage{booktabs}
+\usepackage{amsmath}
+\usepackage{multirow}
+\usepackage{hyperref}
+
+\title{Dual-Domain MMD Adaptation: Held-Out Test Set and Large-Target Follow-Up}
+\author{}
+\date{\today}
+
+\begin{document}
+\maketitle
+
+\section{What this document adds}
+
+Two things not present in \texttt{experiment\_summary\_v6.tex} or
+\texttt{freeze\_epoch\_ablation.tex}: (1) a genuinely held-out real test set, and
+(2) a first look at \texttt{real\_large} (rather than \texttt{real\_small}) as the
+adaptation target from a \texttt{syn\_xlarge} source, at both YOLOv10n and YOLOv10m
+scale.
+
+\subsection{The held-out test set}
+
+Every real-domain comparison in this study up to now, baselines included, has been
+scored on the same 548-image real validation set -- which is also the set used for
+checkpoint selection (\texttt{best.pt}) and early stopping during training. That is a
+mild form of leakage: the val set is never trained on directly, but it does influence
+which epoch's weights get kept.
+
+\texttt{real\_test\_heldout} closes that gap. It is the official VisDrone2019-DET
+\emph{test-dev} split (1610 images), which is a separate download from the
+train/val archive this project's \texttt{real\_small}/\texttt{real\_large} both draw
+from (\texttt{scripts/build\_domain\_datasets.py}'s \texttt{DEFAULT\_REAL\_ROOT}).
+Filename-level comparison confirmed zero overlap with the train+val pool used by any
+run in this study. Labels were remapped from VisDrone's raw 12-category scheme to
+this project's person/vehicle scheme, bicycles and ignored-regions dropped, matching
+the \texttt{yolo\_splits\_no\_bikes} convention already used for \texttt{real\_small}/
+\texttt{real\_large}. All 1610 images retained at least one box after the remap.
+Built non-destructively: images symlinked, nothing existing modified.
+
+\section{real\_small target, re-checked on the held-out set}
+
+\begin{table}[h!]
+    \centering
+    \begin{tabular}{lrrrr}
+        \toprule
+        Model & person mAP50 & person mAP50-95 & vehicle mAP50 & vehicle mAP50-95 \\
+        \midrule
+        baseline (real\_small, solo) & 0.433 & 0.178 & 0.713 & 0.463 \\
+        MMD (regularized, syn\_xlarge pretrain) & 0.403 & 0.163 & 0.699 & 0.451 \\
+        \bottomrule
+    \end{tabular}
+    \caption{\texttt{real\_small\_1920\_testing-3} (solo, COCO-direct) vs.\
+    \texttt{syn\_xlarge\_yolo\_n\_source\_real\_small\_target\_reg\_fr5}, both
+    evaluated on \texttt{real\_test\_heldout} (1610 images, never used in any
+    train/val split in this study).}
+\end{table}
+
+\noindent Solo wins on every column, slightly more decisively than on the shared
+\texttt{real\_large} val set used elsewhere in this study -- ruling out shared-val
+checkpoint-selection leakage as the explanation for that earlier result.
+
+\section{real\_large as the adaptation target (new)}
+
+Source = \texttt{syn\_xlarge} (YOLOv10n pretrain, 150 epochs, imgsz 1920), target =
+\texttt{real\_large} (6470 train images, vs.\ \texttt{real\_small}'s $\sim$1600) --
+the first time this study has used \texttt{real\_large} rather than
+\texttt{real\_small} as the MMD target. Two MMD variants are compared against a solo
+(COCO-direct, no synthetic detour) baseline trained on the same target set.
+
+\begin{table}[h!]
+    \centering
+    \begin{tabular}{lrrrr}
+        \toprule
+        Model & \multicolumn{2}{c}{real\_large val} & \multicolumn{2}{c}{real\_test\_heldout} \\
+        & mAP50 & mAP50-95 & mAP50 & mAP50-95 \\
+        \midrule
+        real\_large\_1920 (solo, COCO-direct) & 0.805 & 0.505 & 0.617 & 0.349 \\
+        syn\_xlarge\_source\_real\_large\_target\_reg\_fr5 (freeze=6) & 0.790 & 0.496 & 0.598 & 0.339 \\
+        \quad{}\_stronger\_weight-5 (120ep, freeze=25) & \textbf{0.802} & \textbf{0.501} & \textbf{0.606} & \textbf{0.342} \\
+        \bottomrule
+    \end{tabular}
+    \caption{\texttt{real\_large} as MMD target, source \texttt{syn\_xlarge}
+    (YOLOv10n). Solo wins on both eval sets against both MMD variants, but the
+    stronger-weight variant narrows the gap to the tightest margin seen anywhere in
+    this study (0.003--0.007 mAP50-95).}
+\end{table}
+
+\noindent The matched no-MMD control for this regime (plain fine-tune of the
+\texttt{syn\_xlarge} checkpoint on \texttt{real\_large}, no MMD term) has not yet been
+run. Without it, the gap above conflates two variables -- the synthetic-pretrain
+detour itself, and the MMD term -- and cannot yet be attributed to MMD specifically.
+This is the natural next run to close out this section.
+
+\subsection{Model scale: YOLOv10m}
+
+\begin{table}[h!]
+    \centering
+    \begin{tabular}{lrrrr}
+        \toprule
+        Eval set & person mAP50 & person mAP50-95 & vehicle mAP50 & vehicle mAP50-95 \\
+        \midrule
+        real\_large & 0.679 & 0.324 & 0.894 & 0.647 \\
+        real\_test\_heldout & 0.446 & 0.186 & 0.726 & 0.479 \\
+        \bottomrule
+    \end{tabular}
+    \caption{\texttt{syn\_xlarge\_source\_real\_small\_target} at YOLOv10m scale
+    (source = \texttt{syn\_xlarge\_yolo\_m-5}, target = \texttt{real\_small}).
+    Beats every YOLOv10n variant in this study on both eval sets, as expected for
+    the larger backbone. No YOLOv10m solo baseline exists yet to isolate MMD's
+    contribution at this scale.}
+\end{table}
+
+\section{The other direction still holds: real$\to$syn}
+
+\begin{table}[h!]
+    \centering
+    \begin{tabular}{lrrrr}
+        \toprule
+        Model & person mAP50 & person mAP50-95 & vehicle mAP50 & vehicle mAP50-95 \\
+        \midrule
+        syn\_small\_1920\_testing-2 (solo) & 0.667 & 0.332 & 0.684 & 0.465 \\
+        real\_large\_source\_syn\_small\_target\_reg-4 (MMD) & \textbf{0.678} & \textbf{0.344} & \textbf{0.691} & \textbf{0.477} \\
+        \bottomrule
+    \end{tabular}
+    \caption{Source = \texttt{real\_large\_1920}, target = \texttt{syn\_small},
+    evaluated on \texttt{syn\_large} val (640 images). This is the only comparison
+    in this document where MMD beats solo on every column -- consistent with
+    \texttt{experiment\_summary\_v1}/README already flagging real$\to$syn as the
+    direction where adaptation genuinely helps, unlike syn$\to$real.}
+\end{table}
+
+\section{Diagnostic: bandwidth-freeze does not prevent late-training drift}
+
+Investigated why \texttt{train/mmd\_distance} climbs back up after the bandwidth
+freeze, across two runs with different freeze epochs:
+
+\begin{itemize}
+    \item \textbf{freeze=6}: distance drops fast (177{,}446 $\to$ 157) through epoch
+    6, then climbs straight back to $\sim$25{,}000 by epoch 11 -- superficially
+    consistent with freezing mid-collapse, before the EMA had stabilized.
+    \item \textbf{freeze=25}: distance was already low and fluctuating
+    (18--1268) for several epochs \emph{before} freezing, i.e.\ genuinely stabilized
+    -- yet still climbed steadily afterward (256 at epoch 27 $\to$ 7870 by epoch 45,
+    roughly 300--400/epoch). This rules out ``froze too early'' as the explanation.
+\end{itemize}
+
+\noindent The behavior looks structural rather than a tunable timing issue: once
+frozen, the bandwidth stops tracking current feature geometry, and the MMD weight is
+simultaneously decaying by design (to avoid the collapse feedback loop documented in
+\texttt{experiment\_summary\_v2.tex}). Once detection loss dominates enough, nothing
+anchors the backbone's features to where they were at freeze time, so raw distance
+from that now-stale reference drifts upward for the remainder of training regardless
+of which epoch the freeze happened at. Detection mAP kept improving normally in both
+affected runs, so this reads as an expected loss of signal in a late-training
+diagnostic rather than a training pathology worth chasing further via freeze-epoch
+tuning.
+
+\section{Open items}
+
+\begin{itemize}
+    \item No-MMD control for \texttt{real\_large} target (source \texttt{syn\_xlarge},
+    plain fine-tune, no MMD term) -- needed to attribute the real\_large-target gap
+    to MMD specifically rather than the synthetic-pretrain detour alone.
+    \item No YOLOv10m solo baseline on \texttt{real\_small} or \texttt{real\_large} --
+    needed to check whether the solo-beats-MMD pattern holds at this model scale too.
+    \item \texttt{real\_test\_heldout} has only been used with real-domain,
+    \texttt{real\_small}/\texttt{real\_large}-target checkpoints so far; no equivalent
+    held-out set exists yet for the synthetic domain.
+\end{itemize}
+
+\end{document}

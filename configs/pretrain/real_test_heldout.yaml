@@ -1,0 +1,16 @@
+# Genuinely held-out real (VisDrone) test set -- the official VisDrone2019-DET
+# test-dev split (1610 images), never used by any train/val split in this project.
+# real_small/real_large only ever draw from yolo_splits_no_bikes/{train,val}
+# (see scripts/build_domain_datasets.py); test-dev is a separate download and has
+# zero filename overlap with that train+val pool. Classes remapped from VisDrone's
+# raw 12-category scheme to this project's person/vehicle scheme, bicycles and
+# ignored-regions dropped, matching the yolo_splits_no_bikes convention.
+#
+# train: intentionally points at the same images as val -- this yaml is only ever
+# meant to be used with model.val(), never model.train().
+path: /mnt/15TB-NVME/chr65046/datasets/real_test_heldout
+
+train: images/val
+val: images/val
+
+names: [person, vehicle]

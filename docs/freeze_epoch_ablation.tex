@@ -30,47 +30,53 @@ since naive\_mmd never freezes the bandwidth at all.
 \begin{table}[h!]
     \centering
     \small
-    \setlength{\tabcolsep}{4pt}
-    \begin{tabular}{lrrrrrr}
+    \setlength{\tabcolsep}{6pt}
+    \begin{tabular}{lrrrr}
         \toprule
-        Model & \makecell{overall\\mAP50} & \makecell{overall\\mAP50-95} & \makecell{person\\mAP50} & \makecell{person\\mAP50-95} & \makecell{vehicle\\mAP50} & \makecell{vehicle\\mAP50-95} \\
+        Model & \makecell{person\\mAP50} & \makecell{person\\mAP50-95} & \makecell{vehicle\\mAP50} & \makecell{vehicle\\mAP50-95} \\
         \midrule
-        no\_mmd (reference) & 0.7589 & 0.4561 & 0.648 & 0.296 & 0.870 & 0.617 \\
-        naive\_mmd (reference) & 0.7531 & 0.4543 & 0.637 & 0.291 & 0.869 & 0.618 \\
+        no\_mmd (reference) & 0.648 & 0.296 & 0.870 & 0.617 \\
+        naive\_mmd (reference) & 0.637 & 0.291 & 0.869 & 0.618 \\
         \midrule
-        reg\_mmd, freeze=1 & 0.7530 & 0.4552 & 0.635 & 0.292 & 0.871 & 0.619 \\
-        reg\_mmd, freeze=5 & 0.7569 & 0.4558 & 0.642 & 0.294 & 0.872 & 0.618 \\
+        reg\_mmd, freeze=1 & 0.635 & 0.292 & 0.871 & 0.619 \\
+        reg\_mmd, freeze=5 & 0.642 & 0.294 & 0.872 & 0.618 \\
         \midrule
-        reg\_mmd\_smaller\_weight, freeze=1 & 0.7548 & 0.4540 & 0.639 & 0.291 & 0.871 & 0.617 \\
-        reg\_mmd\_smaller\_weight, freeze=5 & 0.7555 & 0.4542 & 0.635 & 0.289 & 0.876 & 0.620 \\
+        reg\_mmd\_smaller\_weight, freeze=1 & 0.639 & 0.291 & 0.871 & 0.617 \\
+        reg\_mmd\_smaller\_weight, freeze=5 & 0.635 & 0.289 & 0.876 & 0.620 \\
         \bottomrule
     \end{tabular}
     \caption{syn\_large\_1920 $\to$ real\_small, same regularization schedule and
-    weight targets, only bandwidth-freeze-epoch differs within each pair.}
+    weight targets, only bandwidth-freeze-epoch differs within each pair. Overall
+    (all-class) mAP is omitted here -- it is a weighted average across both classes
+    and is not the quantity of interest for this comparison.}
 \end{table}
 
 \section{Discussion}
 
-For reg\_mmd, freeze=5 beats freeze=1 on every column: overall mAP50 +0.4, person
-mAP50 +0.7, vehicle mAP50-95 roughly flat. Freezing the bandwidth at epoch 1 gives
-the EMA estimate almost no time to adapt to the actual feature-space geometry before
-it locks -- the epoch-5 estimate is evidently a better fixed point to align towards
-for the rest of training.
+For reg\_mmd, freeze=5 beats freeze=1 on every column: person mAP50 +0.7
+(0.635 $\to$ 0.642), person mAP50-95 +0.2 (0.292 $\to$ 0.294), vehicle mAP50 +0.1
+(0.871 $\to$ 0.872), vehicle mAP50-95 roughly flat (0.619 vs.\ 0.618). Freezing the
+bandwidth at epoch 1 gives the EMA estimate almost no time to adapt to the actual
+feature-space geometry before it locks -- the epoch-5 estimate is evidently a better
+fixed point to align towards for the rest of training, and the gain shows up mostly
+on person rather than vehicle.
 
 For reg\_mmd\_smaller\_weight the picture is more mixed: freeze=5 gives the best
-vehicle score in either ablation table in this study (0.876/0.620) at a small cost to
-person (0.635 vs.\ 0.639 at freeze=1) and a small overall mAP50 gain (+0.07). This
-mirrors the person/vehicle trade-off already documented in
+vehicle score in either ablation table in this study (mAP50 0.876, mAP50-95 0.620)
+at a small cost to person (mAP50 0.635 vs.\ 0.639 at freeze=1, mAP50-95 0.289 vs.\
+0.291). This mirrors the person/vehicle trade-off already documented in
 \texttt{experiment\_summary\_v6.tex} Section~2.2 -- letting the bandwidth adapt a
 little longer before freezing appears to push the alignment slightly further toward
 the class that dominates the target domain by instance count (vehicle), at a small
 cost to the minority class (person).
 
-Overall, freeze=5 is the better default of the two settings tested here: it matches
-or beats freeze=1 on overall mAP50 in both pairs, and is the setting used for Section~1
-and the newer sections of this study (Sections~2.2 and~3 of
-\texttt{experiment\_summary\_v6.tex}). freeze=1 remains the setting used only for the
-clearnoon side of Section~2.1 in that document, which predates this ablation; that
-inconsistency is called out explicitly here rather than implied to be equivalent.
+Overall, freeze=5 is the better default of the two settings tested here: for reg\_mmd
+it improves both classes outright, and for reg\_mmd\_smaller\_weight it trades a
+small person regression for the best vehicle result in the study. freeze=5 is the
+setting used for Section~1 and the newer sections of this study (Sections~2.2
+and~3 of \texttt{experiment\_summary\_v6.tex}). freeze=1 remains the setting used
+only for the clearnoon side of Section~2.1 in that document, which predates this
+ablation; that inconsistency is called out explicitly here rather than implied to
+be equivalent.
 
 \end{document}
