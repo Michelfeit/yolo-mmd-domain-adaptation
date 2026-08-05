@@ -2,6 +2,6 @@ path: /mnt/15TB-NVME/chr65046/datasets/syn_small
 
 train: images/train
 
-val: images/val
+val: /mnt/15TB-NVME/chr65046/datasets/syn_large/images/val
 
 names: [person, vehicle]
