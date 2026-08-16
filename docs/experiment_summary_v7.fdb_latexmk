@@ -1,7 +1,7 @@
 # Fdb version 4
-["pdflatex"] 1785495364.41492 "/home/chr65046/repos/dual_domain_update/docs/experiment_summary_v6.tex" "experiment_summary_v6.pdf" "experiment_summary_v6" 1785495364.68956 0
+["pdflatex"] 1785927935.36443 "/home/chr65046/repos/dual_domain_update/docs/experiment_summary_v7.tex" "experiment_summary_v7.pdf" "experiment_summary_v7" 1785927935.63627 0
   "/etc/texmf/web2c/texmf.cnf" 1783631970.49499 475 c0e671620eb5563b2130f56340a5fde8 ""
-  "/home/chr65046/repos/dual_domain_update/docs/experiment_summary_v6.tex" 1785495364.25358 10658 0e4c7262c6a0c225417f88fb6f3c5b44 ""
+  "/home/chr65046/repos/dual_domain_update/docs/experiment_summary_v7.tex" 1785927934.91179 9069 75aa9e701c5ff6d1f451cfe0796fe8ea ""
   "/usr/share/texlive/texmf-dist/fonts/map/fontname/texfonts.map" 1577235249 3524 cb3e574dea2d1052e39280babc910dc8 ""
   "/usr/share/texlive/texmf-dist/fonts/tfm/jknappen/ec/tcrm1095.tfm" 1136768653 1536 02c06700a42be0f5a28664c7273f82e7 ""
   "/usr/share/texlive/texmf-dist/fonts/tfm/public/amsfonts/cmextra/cmex7.tfm" 1246382020 1004 54797486969f23fa377b128694d548df ""
@@ -78,12 +78,12 @@
   "/usr/share/texmf/web2c/texmf.cnf" 1707919699 40399 f2c302f7d2af602abb742093540a5834 ""
   "/var/lib/texmf/fonts/map/pdftex/updmap/pdftex.map" 1783631994.51584 5472669 54eaf61a88b6b7896ebd0dac973cb29c ""
   "/var/lib/texmf/web2c/pdftex/pdflatex.fmt" 1783632044 8213909 d13cd7a6df27a5514d4b899633a432d2 ""
-  "experiment_summary_v6.aux" 1785495364.66558 2556 bbb4b1005c1936d5048468e5648d7989 "pdflatex"
-  "experiment_summary_v6.out" 1785495364.66658 1979 e66a54153a0da09997fd5e70b0e278af "pdflatex"
-  "experiment_summary_v6.tex" 1785495364.25358 10658 0e4c7262c6a0c225417f88fb6f3c5b44 ""
+  "experiment_summary_v7.aux" 1785927935.61278 3148 49ebbc8a61da6896109f1f7e48136495 "pdflatex"
+  "experiment_summary_v7.out" 1785927935.61278 1827 8b7e988a637536700241c03196e3e2f0 "pdflatex"
+  "experiment_summary_v7.tex" 1785927934.91179 9069 75aa9e701c5ff6d1f451cfe0796fe8ea ""
   (generated)
-  "experiment_summary_v6.aux"
-  "experiment_summary_v6.log"
-  "experiment_summary_v6.out"
-  "experiment_summary_v6.pdf"
+  "experiment_summary_v7.aux"
+  "experiment_summary_v7.log"
+  "experiment_summary_v7.out"
+  "experiment_summary_v7.pdf"
   (rewritten before read)
