@@ -4,7 +4,8 @@ Detection loss is normally computed only on the target-domain batch (the bigger 
 being fine-tuned); the source domain (already pretrained on) is forward-only, and its
 backbone features are the reference the target domain's features are pulled toward via
 MMD. Setting mmd_cfg.joint_detection_loss=True additionally computes detection loss on
-the source batch too (mutual supervision instead of a frozen reference).
+the source batch too (mutual supervision instead of a frozen reference), scaled by
+mmd_cfg.source_loss_weight (default 1.0, i.e. equal to the target's).
 """
 
 from __future__ import annotations
@@ -60,8 +61,9 @@ class DualDomainDetectionModel(DetectionModel):
             feat_source = self._captured_features
             if self.mmd_cfg.detach_source_features:
                 feat_source = feat_source.detach()
-            loss = loss + source_loss
-            loss_items = {k: loss_items[k] + source_loss_items[k] for k in loss_items}
+            w = self.mmd_cfg.source_loss_weight
+            loss = loss + w * source_loss
+            loss_items = {k: loss_items[k] + w * source_loss_items[k] for k in loss_items}
         elif self.mmd_cfg.detach_source_features:
             with torch.no_grad():
                 self.predict(batch["domain_source"]["img"])

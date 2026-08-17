@@ -33,6 +33,7 @@ class MMDConfig:
     mmd_target_layer: int = 10
     detach_source_features: bool = False
     joint_detection_loss: bool = False  # also compute detection loss on the source domain, not just MMD
+    source_loss_weight: float = 1.0  # scales the source-domain detection loss when joint_detection_loss=True
     weight_schedule: MMDWeightSchedule = field(default_factory=MMDWeightSchedule)
     bandwidth_freeze_epoch: int | None = None  # None = never freeze (EMA keeps updating, old behavior)
 
