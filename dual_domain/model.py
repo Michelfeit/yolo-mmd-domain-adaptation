@@ -32,18 +32,18 @@ class DualDomainDetectionModel(DetectionModel):
     def _capture_hook(self, module: torch.nn.Module, inputs: Any, output: torch.Tensor) -> None:
         self._captured_features = output
 
-    def loss(self, batch: dict[str, Any], preds: Any = None) -> tuple[torch.Tensor, torch.Tensor]:
-        # NOTE: ultralytics' BaseModel.loss() returns (loss, loss_items) as a pair of
-        # plain tensors (loss_items positionally matched against DetectionTrainer's
-        # loss_names by BaseTrainer, not a dict) -- both concatenated with an extra
-        # "mmd_distance" element the same way, below.
+    def loss(self, batch: dict[str, Any], preds: Any = None) -> tuple[torch.Tensor, dict[str, torch.Tensor]]:
+        # NOTE: ultralytics' BaseModel.loss() returns (loss, loss_items) where loss_items
+        # is a dict[str, Tensor] (e.g. {"box_loss": ..., "cls_loss": ..., "dfl_loss": ...}),
+        # not a positionally-matched tensor -- merged by key below, with an extra
+        # "mmd_distance" entry added the same way.
         if "domain_target" not in batch:
             # Plain single-domain call (e.g. stock validation forward). Pad a zero
-            # "mmd_distance" entry so loss_items has the same length as the dual-domain
+            # "mmd_distance" entry so loss_items has the same keys as the dual-domain
             # path below — BaseValidator preallocates its running-loss accumulator
-            # from this tensor's length and would otherwise break on later batches.
+            # from this dict's keys and would otherwise KeyError on later batches.
             loss, loss_items = super().loss(batch, preds)
-            loss_items = torch.cat([loss_items.view(-1), loss.new_zeros(1)])
+            loss_items = {**loss_items, "mmd_distance": loss.new_zeros(())}
             return torch.cat([loss.view(-1), loss.new_zeros(1)]), loss_items
 
         loss, loss_items = super().loss(batch["domain_target"], preds)
@@ -61,7 +61,7 @@ class DualDomainDetectionModel(DetectionModel):
             if self.mmd_cfg.detach_source_features:
                 feat_source = feat_source.detach()
             loss = loss + source_loss
-            loss_items = loss_items + source_loss_items
+            loss_items = {k: loss_items[k] + source_loss_items[k] for k in loss_items}
         elif self.mmd_cfg.detach_source_features:
             with torch.no_grad():
                 self.predict(batch["domain_source"]["img"])
@@ -72,5 +72,5 @@ class DualDomainDetectionModel(DetectionModel):
 
         mmd, distance = self._mmd(feat_source, feat_target)
         loss = torch.cat([loss.view(-1), (self.mmd_weight * mmd).view(1)])
-        loss_items = torch.cat([loss_items.view(-1), distance.detach().view(1)])
+        loss_items = {**loss_items, "mmd_distance": distance.detach()}
         return loss, loss_items

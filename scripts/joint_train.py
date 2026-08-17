@@ -34,6 +34,7 @@ def main() -> None:
     parser.add_argument("--epochs", type=int, default=100)
     parser.add_argument("--imgsz", type=int, default=2080)
     parser.add_argument("--batch", type=int, default=8)
+    parser.add_argument("--device", default=None, help="e.g. '0,1' for 2-GPU DDP, or a single index like '0'")
     parser.add_argument(
         "--no-mmd", action="store_true",
         help="joint detection loss on both domains, MMD weight forced to 0 (still computed each "
@@ -109,6 +110,7 @@ def main() -> None:
             "epochs": args.epochs,
             "imgsz": args.imgsz,
             "batch": args.batch,
+            "device": args.device,
             "project": joint_project,
             "name": name,
             "mmd": {
@@ -135,7 +137,16 @@ def main() -> None:
             extract_batch_size=args.pca_batch_size,
         )
         trainer.train()
-        rows.append({"run": name, "source_domain": spec["source_domain"], "variant": variant, **trainer.metrics})
+        if trainer.metrics is None:
+            # Multi-GPU (--device with 2+ ids): BaseTrainer.train() only spawns a DDP
+            # subprocess from this process and returns -- the actual training/final_eval
+            # (and this trainer's self.metrics) happen in that subprocess's own trainer
+            # instance, never in this one. Checkpoints/results.csv on disk are unaffected;
+            # only this process's summary-row bookkeeping has nothing to read.
+            print(f"  (metrics unavailable in the DDP launcher process for {name}; "
+                  f"see {joint_project}/{name}/results.csv for per-epoch numbers)")
+        else:
+            rows.append({"run": name, "source_domain": spec["source_domain"], "variant": variant, **trainer.metrics})
 
     # Merge with any existing summary rather than overwrite, so re-running just one
     # direction (e.g. --only after a crash) doesn't lose the other direction's row.

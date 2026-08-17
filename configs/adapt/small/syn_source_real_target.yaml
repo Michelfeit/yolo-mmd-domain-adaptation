@@ -1,0 +1,14 @@
+# Joint-training smoke/dev config: source = syn_small (pretrained), target = real_small.
+# Both are the project's smallest subsets, for a fast joint-detection-loss(+MMD) run.
+# Pair with runs/yolov10n_small/pretrain/syn/weights/best.pt (see scripts/joint_train.py
+# --pretrain-model-tag yolov10n_small).
+
+source:
+  train: /mnt/15TB-NVME/chr65046/datasets/syn_small/images/train
+  val: /mnt/15TB-NVME/chr65046/datasets/syn_large/images/val
+
+target:
+  train: /mnt/15TB-NVME/chr65046/datasets/real_small/images/train
+  val: /mnt/15TB-NVME/chr65046/datasets/real_small/images/val
+
+names: [person, vehicle]
